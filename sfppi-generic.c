@@ -31,6 +31,8 @@
 #else
 #include <linux/i2c-dev.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
+#include <i2c/smbus.h>
 #endif
 
 #include <errno.h>

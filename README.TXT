@@ -1,3 +1,9 @@
+Install (GB)
+
+raspi-config # Interface Option -> I2C (enable)
+sudo install libi2c-dev libssl-dev
+
+
 This inital version 0.2 of sfp-generic.c has the following functionality.
 
 sfppi -r: 

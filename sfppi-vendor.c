@@ -30,8 +30,11 @@
 #include <wiringPi.h>
 #include <wiringPiI2C.h>
 #else
+
 #include <linux/i2c-dev.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
+#include <i2c/smbus.h>
 #endif
 
 #include <zlib.h>
