@@ -26,16 +26,10 @@
 #include <string.h>
 #include <stdlib.h>
 
-#ifndef BEAGLEBONE
-#include <wiringPi.h>
-#include <wiringPiI2C.h>
-#else
-
 #include <linux/i2c-dev.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <i2c/smbus.h>
-#endif
 
 #include <zlib.h>
 #include <openssl/evp.h>
@@ -54,9 +48,7 @@ int read_sfp(void);
 int xio,write_checksum;
 unsigned char A50[256]; //only interested in the first 128 bytes
 unsigned char A51[256];
-#ifdef BEAGLEBONE
 char filenm[20]="/dev/i2c-1";
-#endif
 
 int main (int argc, char *argv[])
 {
@@ -262,17 +254,9 @@ int dump(char *filename)
 int read_eeprom(unsigned char address)
 {
 	int xio,i,fd1;
-#ifndef BEAGLEBONE
-        xio = wiringPiI2CSetup (address);
-	if (xio < 0){
-                fprintf (stderr, "xio: Unable to initialise I2C: %s\n",
-                                strerror (errno));
-                return 1;
-        }
-#else
-    char filenm[20]="/dev/i2c-1"; //i2c bus number must be modified accordingly
+	char filenm[20]="/dev/i2c-1"; //i2c bus number must be modified accordingly
 
-    xio = open(filenm, O_RDWR);
+	xio = open(filenm, O_RDWR);
 	if (xio < 0) {
 	  fprintf (stderr, "Unable to open device: %s\n", filenm);
 	  return(1);
@@ -282,14 +266,9 @@ int read_eeprom(unsigned char address)
   	    fprintf (stderr, "xio: Unable to initialise I2C: %s\n", strerror (errno));
         return(1);
   	}
-#endif
         /*Read in the first 128 bytes 0 to 127*/
         for(i=0; i <128; i++){
-#ifndef BEAGLEBONE
-                fd1 = wiringPiI2CReadReg8 (xio,i);
-#else
                 fd1 = i2c_smbus_read_byte_data(xio,i);
-#endif
                 if  (address == 0x50){
 			A50[i] = fd1;
 		}
@@ -395,7 +374,6 @@ int vendor_fy(void)
 		if ((ch == 'Y') || (ch == 'y'))
 		{
 			printf("Writing Digest wait....\n");
-#ifdef BEAGLEBONE
             xio = open(filenm, O_RDWR);
             if (xio < 0) {
               fprintf (stderr, "Unable to open device: %s\n", filenm);
@@ -406,20 +384,8 @@ int vendor_fy(void)
                 fprintf (stderr, "xio: Unable to initialise I2C: %s\n", strerror (errno));
                 return(1);
             }
-#else
-			xio = wiringPiI2CSetup (0x50);
-				if (xio < 0){
-				fprintf (stderr, "xio: Unable to initialise I2C: %s\n",
-                                strerror (errno));
-				return 1;
-				}
-#endif
-			for(i = 0; i < 28; i++) {
-#ifndef BEAGLEBONE
-			wiringPiI2CWriteReg8(xio, 0x60+i, vendor_valid_id[i]);
-#else
-            i2c_smbus_write_byte_data(xio, 0x60+i, vendor_valid_id[i]);
-#endif
+	for(i = 0; i < 28; i++) {
+			i2c_smbus_write_byte_data(xio, 0x60+i, vendor_valid_id[i]);
 			usleep(50000);//sleep for 0.5ms per byte 
 			}
 		} else printf("nothing written");
@@ -443,14 +409,6 @@ int vendor_fy(void)
 		if ((ch == 'Y') || (ch == 'y'))
 		{
 			printf("Writing CRC32 wait....\n");
-#ifndef BEAGLEBONE
-			xio = wiringPiI2CSetup (0x50);
-				if (xio < 0){
-				fprintf (stderr, "xio: Unable to initialise I2C: %s\n",
-                                strerror (errno));
-				return 1;
-				}
-#else
             xio = open(filenm, O_RDWR);
             if (xio < 0) {
               fprintf (stderr, "Unable to open device: %s\n", filenm);
@@ -461,14 +419,9 @@ int vendor_fy(void)
                 fprintf (stderr, "xio: Unable to initialise I2C: %s\n", strerror (errno));
                 return(1);
             }
-#endif
 			for(i = 0; i < 4; i++)
 			{
-#ifndef BEAGLEBONE
-			wiringPiI2CWriteReg8(xio, 0x7c+i,vendor_crc[i]);
-#else
             i2c_smbus_write_byte_data(xio, 0x7c+i, vendor_crc[i]);
-#endif
 			usleep(50000);//wait 0.5ms per byte
 			}
 		} else printf("nothing written\n");
@@ -504,14 +457,6 @@ int mychecksum(unsigned char start_byte, unsigned char end_byte)
 			ch = getchar();
 			getchar();
 			if ((ch == 'Y') || (ch == 'y')) {
-#ifndef BEAGLEBONE
-				xio = wiringPiI2CSetup (0x50);
-				if (xio < 0){
-				fprintf (stderr, "xio: Unable to initialise I2C: %s\n",
-                                strerror (errno));
-				return 1;
-				}
-#else
                 xio = open(filenm, O_RDWR);
                 if (xio < 0) {
                   fprintf (stderr, "Unable to open device: %s\n", filenm);
@@ -522,13 +467,8 @@ int mychecksum(unsigned char start_byte, unsigned char end_byte)
                     fprintf (stderr, "xio: Unable to initialise I2C: %s\n", strerror (errno));
                     return(1);
                 }
-#endif
-				printf("end_byte = %x and sum = %x - yes\n",end_byte, sum);
-#ifndef BEAGLEBONE
-				wiringPiI2CWriteReg8(xio, end_byte, sum);
-#else
-                i2c_smbus_write_byte_data(xio, end_byte, sum);
-#endif
+			printf("end_byte = %x and sum = %x - yes\n",end_byte, sum);
+			i2c_smbus_write_byte_data(xio, end_byte, sum);
 			} else printf("nothing written\n");
 		}
 		return 0;
