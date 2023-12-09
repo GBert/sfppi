@@ -9,4 +9,4 @@ sfppi-vendor: sfppi-vendor.o
 	gcc -o sfppi-vendor sfppi-vendor.c -lcrypto -lz -lm -li2c
 
 clean:
-	$(RM) sfppi-generic sfppi-vendor 
+	$(RM) *.o sfppi-generic sfppi-vendor 
