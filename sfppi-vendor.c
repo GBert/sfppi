@@ -50,6 +50,15 @@ unsigned char A50[256];		//only interested in the first 128 bytes
 unsigned char A51[256];
 char filenm[20] = "/dev/i2c-1";
 
+void print_usage(char *prg) {
+    fprintf(stderr, "\nUsage: %s\n", prg);
+    fprintf(stderr, "         -r read the sfp or sfp+\n");
+    fprintf(stderr, "         -c calculate checksums bytes\n");
+    fprintf(stderr, "         -m Print DOM values if SFP supports DOM\n");
+    fprintf(stderr, "         -d filename - dump the eprom to a file\n");
+    fprintf(stderr, "\n\n");
+}
+
 int main(int argc, char *argv[]) {
     int opt;
     write_checksum = 0;
@@ -70,20 +79,12 @@ int main(int argc, char *argv[]) {
 	    dump(optarg);
 	    break;
 	default:		/* '?' */
-	    fprintf(stderr,
-		    "Usage: %s\n"
-		    "	-r read the sfp or sfp+\n"
-		    "	-c calculate and write Vendor bytes\n"
-		    "	-m Print DOM values if SFP supports DOM\n" "	-d filename - dump the eprom to a file\n", argv[0]);
+	    print_usage(argv[0]);
 	    exit(EXIT_FAILURE);
 	}
     }
     if (argc <= 1) {
-	fprintf(stderr,
-		"Usage: %s\n"
-		"	-r read the sfp or sfp+\n"
-		"	-c calculate and write Vendor bytes\n"
-		"	-m Print DOM values if SFP supports DOM\n" "	-d filename - save the eprom to a file\n", argv[0]);
+	print_usage(argv[0]);
 	exit(EXIT_FAILURE);
     }
 }
