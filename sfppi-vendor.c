@@ -333,7 +333,7 @@ int vendor_fy(void) {
     EVP_MD_CTX *mdctx;
     const EVP_MD *md;
     unsigned char md_value[EVP_MAX_MD_SIZE];
-    int md_len;
+    unsigned int md_len;
 
     OpenSSL_add_all_digests();
     mdctx = EVP_MD_CTX_create();
