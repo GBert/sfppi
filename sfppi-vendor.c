@@ -230,6 +230,7 @@ int dump(char *filename) {
 	fprintf(fp, "  %02x", A50[counter]);
 	counter = counter + 1;
     }
+    fprintf(fp, "\n");
     fclose(fp);
     return 0;
 }
