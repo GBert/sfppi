@@ -22,6 +22,7 @@
 ***********************************************************************
 */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -48,7 +49,9 @@ int read_sfp(void);
 int xio, write_checksum;
 unsigned char A50[256];		//only interested in the first 128 bytes
 unsigned char A51[256];
-char filenm[20] = "/dev/i2c-1";
+
+char *i2cbus = NULL;
+char *i2cbus_default = "/dev/i2c-1";
 
 void print_usage(char *prg) {
     fprintf(stderr, "\nUsage: %s\n", prg);
@@ -56,12 +59,16 @@ void print_usage(char *prg) {
     fprintf(stderr, "         -c calculate checksums bytes\n");
     fprintf(stderr, "         -m Print DOM values if SFP supports DOM\n");
     fprintf(stderr, "         -d filename - dump the eprom to a file\n");
+    fprintf(stderr, "         -i i2cbus - default %s\n", i2cbus_default);
     fprintf(stderr, "\n\n");
 }
 
 int main(int argc, char *argv[]) {
     int opt;
+
     write_checksum = 0;
+    asprintf(&i2cbus, "%s", i2cbus_default);
+
     while ((opt = getopt(argc, argv, "rcmd:")) != -1) {
 	switch (opt) {
 	case 'r':
@@ -78,6 +85,10 @@ int main(int argc, char *argv[]) {
 	case 'd':
 	    dump(optarg);
 	    break;
+	case 'i':
+	    free(i2cbus);
+	    asprintf(&i2cbus, "%s", optarg);
+	    break;
 	default:		/* '?' */
 	    print_usage(argv[0]);
 	    exit(EXIT_FAILURE);
@@ -88,6 +99,7 @@ int main(int argc, char *argv[]) {
 	exit(EXIT_FAILURE);
     }
 }
+
 int read_sfp(void) {
     unsigned char transceiver[8];	//8 bytes - address 3 to 10
     unsigned char vendor[16 + 1];	//16 bytes - address 20 to 35
@@ -237,11 +249,10 @@ int dump(char *filename) {
 
 int read_eeprom(unsigned char address) {
     int xio, i, fd1;
-    char filenm[20] = "/dev/i2c-1";	//i2c bus number must be modified accordingly
 
-    xio = open(filenm, O_RDWR);
+    xio = open(i2cbus, O_RDWR);
     if (xio < 0) {
-	fprintf(stderr, "Unable to open device: %s\n", filenm);
+	fprintf(stderr, "Unable to open device: %s\n", i2cbus);
 	return (1);
     }
 
@@ -359,9 +370,9 @@ int vendor_fy(void) {
     getchar();
     if ((ch == 'Y') || (ch == 'y')) {
 	printf("Writing Digest wait....\n");
-	xio = open(filenm, O_RDWR);
+	xio = open(i2cbus, O_RDWR);
 	if (xio < 0) {
-	    fprintf(stderr, "Unable to open device: %s\n", filenm);
+	    fprintf(stderr, "Unable to open device: %s\n", i2cbus);
 	    return (1);
 	}
 
@@ -395,9 +406,9 @@ int vendor_fy(void) {
     getchar();
     if ((ch == 'Y') || (ch == 'y')) {
 	printf("Writing CRC32 wait....\n");
-	xio = open(filenm, O_RDWR);
+	xio = open(i2cbus, O_RDWR);
 	if (xio < 0) {
-	    fprintf(stderr, "Unable to open device: %s\n", filenm);
+	    fprintf(stderr, "Unable to open device: %s\n", i2cbus);
 	    return (1);
 	}
 
@@ -442,9 +453,9 @@ int mychecksum(unsigned char start_byte, unsigned char end_byte) {
 	ch = getchar();
 	getchar();
 	if ((ch == 'Y') || (ch == 'y')) {
-	    xio = open(filenm, O_RDWR);
+	    xio = open(i2cbus, O_RDWR);
 	    if (xio < 0) {
-		fprintf(stderr, "Unable to open device: %s\n", filenm);
+		fprintf(stderr, "Unable to open device: %s\n", i2cbus);
 		return (1);
 	    }
 
