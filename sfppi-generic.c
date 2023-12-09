@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
     write_checksum = 0;
     asprintf(&i2cbus, "%s", i2cbus_default);
 
-    while ((opt = getopt(argc, argv, "rcmd:")) != -1) {
+    while ((opt = getopt(argc, argv, "rcmd:i:")) != -1) {
 	switch (opt) {
 	case 'r':
 	    read_sfp();
