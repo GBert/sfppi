@@ -36,16 +36,18 @@
 #include <math.h>
 
 #define VERSION 0.2
+#define EEPROM_SIZE 256
 
 int mychecksum(unsigned char start_byte, unsigned char end_byte);
 int dump(char *filename);
 int read_eeprom(unsigned char);
+int read_eeprom_file(char *);
 int dom(void);
 
 int read_sfp(void);
 int xio, write_checksum;
-unsigned char A50[256];		//only interested in the first 128 bytes
-unsigned char A51[256];
+unsigned char A50[EEPROM_SIZE];	//only interested in the first 128 bytes
+unsigned char A51[EEPROM_SIZE];
 char *i2cbus = NULL;
 char *i2cbus_default = "/dev/i2c-1";
 
@@ -55,11 +57,11 @@ void print_usage(char *prg) {
     fprintf(stderr, "         -c calculate checksums bytes\n");
     fprintf(stderr, "         -m Print DOM values if SFP supports DOM\n");
     fprintf(stderr, "         -d filename - dump the eprom to a file\n");
-    fprintf(stderr, "         -i i2cbus - default %s\n", i2cbus_default);
+    fprintf(stderr, "         -i i2cbus or input file - default %s\n", i2cbus_default);
     fprintf(stderr, "\n\n");
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char **argv) {
     int opt;
 
     write_checksum = 0;
@@ -123,9 +125,16 @@ int read_sfp(void) {
     printf("sfppi-generic Version:%0.1f\n\n", VERSION);
 
     //Copy eeprom SFP details into A50
-    if (!read_eeprom(0x50)) ;
-    else
-	exit(EXIT_FAILURE);
+    // TODO: better file recognition
+    if (strstr(i2cbus, "i2c")) {
+	if (!read_eeprom(0x50)) ;
+	else
+	    exit(EXIT_FAILURE);
+    } else {
+	if (!read_eeprom_file(i2cbus)) ;
+	else
+	    exit(EXIT_FAILURE);
+    }
 
     //print the connector type
     printf("Connector Type = %s", connector[A50[2]]);
@@ -267,6 +276,33 @@ int read_eeprom(unsigned char address) {
 	    return 1;
 	}
     }
+    return 0;
+}
+
+int read_eeprom_file(char *filename) {
+    FILE *fp;
+    int file_size;
+
+    fp = fopen(filename, "rb");
+    if (fp == NULL) {
+	fprintf(stderr, "%s: error fopen failed [%s]\n", __func__, filename);
+	return 1;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    file_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    /*Read in the first 128 bytes 0 to 127 */
+    if (file_size <= EEPROM_SIZE) {
+	if ((fread((void *)A50, 1, file_size, fp)) != file_size) {
+	    fprintf(stderr, "%s: error: fread failed for [%s]\n", __func__, filename);
+	    fclose(fp);
+	    return 1;
+	}
+    }
+
+    fclose(fp);
     return 0;
 }
 
