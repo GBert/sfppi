@@ -48,6 +48,7 @@ int read_sfp(void);
 int xio, write_checksum;
 unsigned char A50[EEPROM_SIZE];	//only interested in the first 128 bytes
 unsigned char A51[EEPROM_SIZE];
+
 char *i2cbus = NULL;
 char *i2cbus_default = "/dev/i2c-1";
 
@@ -63,6 +64,8 @@ void print_usage(char *prg) {
 
 int main(int argc, char **argv) {
     int opt;
+    int config_read;
+    char *dump_file = NULL;
 
     write_checksum = 0;
     asprintf(&i2cbus, "%s", i2cbus_default);
@@ -70,17 +73,17 @@ int main(int argc, char **argv) {
     while ((opt = getopt(argc, argv, "rcmd:i:")) != -1) {
 	switch (opt) {
 	case 'r':
-	    read_sfp();
+	    config_read = 1;
 	    break;
 	case 'c':
 	    write_checksum = 1;
-	    read_sfp();
+	    config_read = 1;
 	    break;
 	case 'm':
 	    dom();
 	    break;
 	case 'd':
-	    dump(optarg);
+	    asprintf(&dump_file, "%s", optarg);
 	    break;
 	case 'i':
 	    free(i2cbus);
@@ -94,6 +97,12 @@ int main(int argc, char **argv) {
     if (argc <= 1) {
 	print_usage(argv[0]);
 	exit(EXIT_FAILURE);
+    }
+    if (config_read)
+	read_sfp();
+    if (dump_file) {
+	dump(optarg);
+	free(dump_file);
     }
 }
 
@@ -164,7 +173,7 @@ int read_sfp(void) {
 	printf("\nTransceiver is unknown");
     }
 
-    //3 bytes.60 high order, 61 low order. Byte 62 is the mantissa
+    //3 bytes.60 high order, 61 low order, byte 62 is the mantissa
     //print sfp wavelength 
     cwdm_wave = ((int)A50[60] << 8) | ((int)A50[61]);
     printf("\nWavelength = %d.%d", cwdm_wave, A50[62]);
