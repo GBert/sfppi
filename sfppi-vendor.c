@@ -1,28 +1,28 @@
 /*
-*       sfppi-vendor.c
-*
-* 	Author - eoinpk.ek@gmail.com
-*
-*	To compile gcc -o sfppi-vendor sfppi-vendor.c -lwiringPi -lcrypto -lz
-*	-lm
-*
-*       sfppi-vendor is free software: you can redistribute it and/or modify
-*       it under the terms of the GNU Lesser General Public License as
-*       published by the Free Software Foundation, either version 3 of the
-*       License, or (at your option) any later version.
-*
-*       sfppi-vendor is distributed in the hope that it will be useful,
-*       but WITHOUT ANY WARRANTY; without even the implied warranty of
-*       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*       GNU Lesser General Public License for more details.
-*
-*       You should have received a copy of the GNU Lesser General Public
-*       License along with sfppi-generic.
-*       If not, see <http://www.gnu.org/licenses/>.
-***********************************************************************
-*/
+ *       sfppi-vendor.c
+ *
+ * 	Author - eoinpk.ek@gmail.com
+ *
+ *	To compile gcc -o sfppi-vendor sfppi-vendor.c -lwiringPi -lcrypto -lz -lm
+ *
+ *
+ *       sfppi-vendor is free software: you can redistribute it and/or modify
+ *       it under the terms of the GNU Lesser General Public License as
+ *       published by the Free Software Foundation, either version 3 of the
+ *       License, or (at your option) any later version.
+ *
+ *       sfppi-vendor is distributed in the hope that it will be useful,
+ *       but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *       GNU Lesser General Public License for more details.
+ *
+ *       You should have received a copy of the GNU Lesser General Public
+ *       License along with sfppi-generic.
+ *       If not, see <http://www.gnu.org/licenses/>.
+ ***********************************************************************/
 
 #define _GNU_SOURCE
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -38,22 +38,25 @@
 #include <unistd.h>
 #include <math.h>
 
-#define VERSION 0.2
+#define VERSION 0.3
 #define EEPROM_SIZE 256
+#define MAX_SERIAL_LENGTH 16
 
 int mychecksum(unsigned char start_byte, unsigned char end_byte);
-int dump(char *filename);
+// int dump(char *filename);
 int read_eeprom(unsigned char);
 int read_eeprom_file(char *);
 int dom(void);
-int vendor_fy(void);
-int read_sfp(void);
+// int vendor_fy(void);
+// int read_sfp(void);
 int xio, write_checksum;
 unsigned char A50[EEPROM_SIZE];	//only interested in the first 128 bytes
 unsigned char A51[EEPROM_SIZE];
 
 char *i2cbus = NULL;
 char *i2cbus_default = "/dev/i2c-1";
+char *vendor_key_string = NULL;
+char *serial_number = NULL;
 
 void print_usage(char *prg) {
     fprintf(stderr, "\nUsage: %s\n", prg);
@@ -62,64 +65,40 @@ void print_usage(char *prg) {
     fprintf(stderr, "         -m Print DOM values if SFP supports DOM\n");
     fprintf(stderr, "         -d filename - dump the eprom to a file\n");
     fprintf(stderr, "         -i i2cbus or input file - default %s\n", i2cbus_default);
+    fprintf(stderr, "         -k vendor key\n");
+    fprintf(stderr, "         -s serial number\n");
     fprintf(stderr, "\n\n");
 }
 
-int main(int argc, char **argv) {
-    int opt;
-    int config_read;
-    char *dump_file = NULL;
+int hex_to_bin(char ch) {
+    if ((ch >= '0') && (ch <= '9'))
+	return ch - '0';
+    ch = tolower(ch);
+    if ((ch >= 'a') && (ch <= 'f'))
+	return ch - 'a' + 10;
+    return -1;
+}
 
-    write_checksum = 0;
-    asprintf(&i2cbus, "%s", i2cbus_default);
-
-    while ((opt = getopt(argc, argv, "rcmd:i:")) != -1) {
-	switch (opt) {
-	case 'r':
-	    config_read = 1;
-	    break;
-	case 'c':
-	    write_checksum = 1;
-	    config_read = 1;
-	    break;
-	case 'm':
-	    dom();
-	    break;
-	case 'd':
-	    asprintf(&dump_file, "%s", optarg);
-	    break;
-	case 'i':
-	    free(i2cbus);
-	    asprintf(&i2cbus, "%s", optarg);
-	    break;
-	default:		/* '?' */
-	    print_usage(argv[0]);
-	    exit(EXIT_FAILURE);
+int hex2bin(unsigned char *dst, const char *src, size_t count) {
+    while (count--) {
+	int hi = hex_to_bin(*src++);
+	int lo = hex_to_bin(*src++);
+	if ((hi < 0) || (lo < 0))
+	    return -1;
+	*dst++ = (hi << 4) | lo;
 	}
-    }
-    if (argc <= 1) {
-	print_usage(argv[0]);
-	exit(EXIT_FAILURE);
-    }
-    if (config_read) {
-	read_sfp();
-	vendor_fy();
-    }
-    if (dump_file) {
-	dump(optarg);
-	free(dump_file);
-    }
+    return 0;
 }
 
 int read_sfp(void) {
-    unsigned char transceiver[8];	//8 bytes - address 3 to 10
-    unsigned char vendor[16 + 1];	//16 bytes - address 20 to 35
-    unsigned char oui[3];	//3 bytes - address 37 to 39
-    unsigned char partnumber[16 + 1];	//16 bytes - address 40 to 55
-    unsigned char revision[4];	//4 bytes - address 56 - 59
-    unsigned char serial[16 + 1];	//16 bytes - address 68 to 83
-    unsigned char date[8 + 1];	//8 bytes - address 84 to 91 
-    unsigned char vendor_spec[16];	//16 bytes - address 99 to 114
+    unsigned char transceiver[8];	// 8 bytes - address  3 - 10
+    unsigned char vendor[16 + 1];	//16 bytes - address 20 - 35
+    unsigned char oui[3];		// 3 bytes - address 37 - 39
+    unsigned char partnumber[16 + 1];	//16 bytes - address 40 - 55
+    unsigned char revision[4];		// 4 bytes - address 56 - 59
+    unsigned char serial[16 + 1];	//16 bytes - address 68 - 83
+    unsigned char date[8 + 1];		// 8 bytes - address 84 - 91
+    unsigned char vendor_spec[16];	//16 bytes - address 99 - 114
     int cwdm_wave;
     static char *connector[16] = {
 	"Unknown",
@@ -334,7 +313,7 @@ int dom(void) {
     tx_bias = (float)(A51[100] << 8 | A51[101]) * 0.002;
     optical_tx = 10 * log10((float)(A51[102] << 8 | A51[103]) * 0.0001);
     optical_rx = 10 * log10((float)(A51[104] << 8 | A51[105]) * 0.0001);
-    //Print the results
+   
     printf("Internal SFP Temperature = %4.2fC\n", temperature);
     printf("Internal supply voltage = %4.2fV\n", vcc);
     printf("TX bias current = %4.2fmA\n", tx_bias);
@@ -345,16 +324,18 @@ int dom(void) {
 }
 
 int vendor_fy(void) {
-    //You need to add a valid 16 byte vendor key in Hex
-    unsigned char vendor_key1[16] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-    };
+    unsigned char vendor_key1[16];
     unsigned char man_id[49];
     unsigned long crc_32;
     unsigned char vendor_crc[4];
     unsigned char vendor_id[16];
     unsigned char serial_id[16];
     int i;
+
+    if (hex2bin(vendor_key1, vendor_key_string, 16) < 0) {
+	printf("\nvendor key is not a hex : %s\n", vendor_key_string);
+	exit(EXIT_FAILURE);
+    }
 
     //Copy eeprom SFP details into A50
     if (!read_eeprom(0x50)) ;
@@ -394,8 +375,7 @@ int vendor_fy(void) {
 	printf("%02x", md_value[i]);
 
     //Create valid id
-    unsigned char vendor_trailer[9 + 1] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-    };
+    unsigned char vendor_trailer[9 + 1] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     unsigned char vendor_valid_id[28 + 1];
     vendor_valid_id[0] = 0x00;
     vendor_valid_id[1] = 0x00;
@@ -514,4 +494,64 @@ int mychecksum(unsigned char start_byte, unsigned char end_byte) {
 	    printf("nothing written\n");
     }
     return 0;
+}
+
+int main(int argc, char **argv) {
+    int opt;
+    int config_read;
+    char *dump_file = NULL;
+
+    write_checksum = 0;
+    asprintf(&i2cbus, "%s", i2cbus_default);
+
+    while ((opt = getopt(argc, argv, "rcmd:i:k:s:")) != -1) {
+	switch (opt) {
+	case 'r':
+	    config_read = 1;
+	    break;
+	case 'c':
+	    config_read = 1;
+	    write_checksum = 1;
+	    break;
+	case 'm':
+	    dom();
+	    break;
+	case 'd':
+	    asprintf(&dump_file, "%s", optarg);
+	    break;
+	case 'i':
+	    free(i2cbus);
+	    asprintf(&i2cbus, "%s", optarg);
+	    break;
+	case 'k':
+	    if (strlen(optarg) != 32) {
+		printf("vendor key must be 16 bytes hex !\n");
+		exit(EXIT_FAILURE);
+	    }
+	    asprintf(&vendor_key_string, "%s", optarg);
+	    break;
+	case 's':
+	    if (strlen(optarg) >= MAX_SERIAL_LENGTH) {
+		printf("serial number to long !\n");
+		exit(EXIT_FAILURE);
+	    }
+	    asprintf(&serial_number, "%s", optarg);
+	    break;
+	default:		/* '?' */
+	    print_usage(argv[0]);
+	    exit(EXIT_FAILURE);
+	}
+    }
+    if (argc <= 1) {
+	print_usage(argv[0]);
+	exit(EXIT_FAILURE);
+    }
+    if (config_read) {
+	read_sfp();
+	vendor_fy();
+    }
+    if (dump_file) {
+	dump(optarg);
+	free(dump_file);
+    }
 }
