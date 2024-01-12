@@ -375,7 +375,7 @@ int vendor_fy(void) {
 	printf("%02x", md_value[i]);
 
     //Create valid id
-    unsigned char vendor_trailer[9 + 1] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    unsigned char vendor_trailer[9 + 1] = { 0x00 };
     unsigned char vendor_valid_id[28 + 1];
     vendor_valid_id[0] = 0x00;
     vendor_valid_id[1] = 0x00;
@@ -417,7 +417,7 @@ int vendor_fy(void) {
 
     //printf("\nvalue of returned crc = %x",crc_32);
     vendor_crc[0] = (int)crc_32 & 0xff;	//A50[124]
-    vendor_crc[1] = (int)crc_32 >> 8 & 0xff;	//A50[125]
+    vendor_crc[1] = (int)crc_32 >> 8  & 0xff;	//A50[125]
     vendor_crc[2] = (int)crc_32 >> 16 & 0xff;	//A50[126]
     vendor_crc[3] = (int)crc_32 >> 24 & 0xff;	//A50[127]
     printf("\nCRC32 of the Vendor Padded MD5 =");
