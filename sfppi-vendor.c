@@ -57,6 +57,7 @@ char *i2cbus = NULL;
 char *i2cbus_default = "/dev/i2c-1";
 char *vendor_key_string = NULL;
 char *serial_number = NULL;
+char *file_name = NULL;
 
 void print_usage(char *prg) {
     fprintf(stderr, "\nUsage: %s\n", prg);
@@ -67,6 +68,7 @@ void print_usage(char *prg) {
     fprintf(stderr, "         -i i2cbus or input file - default %s\n", i2cbus_default);
     fprintf(stderr, "         -k vendor key\n");
     fprintf(stderr, "         -s serial number\n");
+    fprintf(stderr, "         -f read file instead I2C\n");
     fprintf(stderr, "\n\n");
 }
 
@@ -118,13 +120,12 @@ int read_sfp(void) {
     printf("SFPpi Version:%0.1f\n\n", VERSION);
 
     //Copy eeprom SFP details into A50
-    // TODO: better file recognition
-    if (strstr(i2cbus, "i2c")) {
-	if (!read_eeprom(0x50)) ;
+    if (file_name) {
+	if (!read_eeprom_file(file_name));
 	else
 	    exit(EXIT_FAILURE);
     } else {
-	if (!read_eeprom_file(i2cbus)) ;
+	if (!read_eeprom(0x50));
 	else
 	    exit(EXIT_FAILURE);
     }
@@ -249,12 +250,12 @@ int read_eeprom(unsigned char address) {
 
     xio = open(i2cbus, O_RDWR);
     if (xio < 0) {
-	fprintf(stderr, "Unable to open device: %s\n", i2cbus);
+	fprintf(stderr, "Unable to open device: %s in %s\n", i2cbus, __func__);
 	return (1);
     }
 
     if (ioctl(xio, I2C_SLAVE, address) < 0) {
-	fprintf(stderr, "xio: Unable to initialise I2C: %s\n", strerror(errno));
+	fprintf(stderr, "xio: Unable to initialise I2C: %s in %s\n", strerror(errno), __func__);
 	return (1);
     }
     /*Read in the first 128 bytes 0 to 127 */
@@ -266,7 +267,7 @@ int read_eeprom(unsigned char address) {
 	    A51[i] = fd1;
 	}
 	if (fd1 < 0) {
-	    fprintf(stderr, "xio: Unable to read i2c address 0x%x: %s\n", address, strerror(errno));
+	    fprintf(stderr, "xio: Unable to read i2c address 0x%x: %s in %s\n", address, strerror(errno), __func__);
 	    return 1;
 	}
     }
@@ -338,16 +339,17 @@ int vendor_fy(void) {
     }
 
     //Copy eeprom SFP details into A50
-    if (!read_eeprom(0x50)) ;
-    else
-	exit(EXIT_FAILURE);
+    if (!file_name)
+	if (!read_eeprom(0x50)) ;
+	else
+	    exit(EXIT_FAILURE);
 
     memcpy(&vendor_id, &A50[20], 16);
     memcpy(&serial_id, &A50[68], 16);
 
     //vendor_tmp holds = man_id 1 byte + 16 byte vendor + 16 byte serial + 
     //  16 byte vendor_key1
-    man_id[0] = 0x00;		//You need to provide a manufacturer id number. 
+    man_id[0] = A50[98];	//You need to provide a manufacturer id number.
     for (i = 1; i < 17; i++)
 	man_id[i] = vendor_id[i - 1];
     for (i = 17; i < 33; i++)
@@ -397,12 +399,12 @@ int vendor_fy(void) {
 	printf("Writing Digest wait....\n");
 	xio = open(i2cbus, O_RDWR);
 	if (xio < 0) {
-	    fprintf(stderr, "Unable to open device: %s\n", i2cbus);
+	    fprintf(stderr, "Unable to open device: %s in %s\n", i2cbus, __func__);
 	    return (1);
 	}
 
 	if (ioctl(xio, I2C_SLAVE, 0x50) < 0) {
-	    fprintf(stderr, "xio: Unable to initialise I2C: %s\n", strerror(errno));
+	    fprintf(stderr, "xio: Unable to initialise I2C: %s in %s\n", strerror(errno), __func__);
 	    return (1);
 	}
 	for (i = 0; i < 28; i++) {
@@ -416,7 +418,7 @@ int vendor_fy(void) {
     crc_32 = crc32(0, vendor_valid_id, 28);
 
     //printf("\nvalue of returned crc = %x",crc_32);
-    vendor_crc[0] = (int)crc_32 & 0xff;	//A50[124]
+    vendor_crc[0] = (int)crc_32 & 0xff;		//A50[124]
     vendor_crc[1] = (int)crc_32 >> 8  & 0xff;	//A50[125]
     vendor_crc[2] = (int)crc_32 >> 16 & 0xff;	//A50[126]
     vendor_crc[3] = (int)crc_32 >> 24 & 0xff;	//A50[127]
@@ -480,12 +482,12 @@ int mychecksum(unsigned char start_byte, unsigned char end_byte) {
 	if ((ch == 'Y') || (ch == 'y')) {
 	    xio = open(i2cbus, O_RDWR);
 	    if (xio < 0) {
-		fprintf(stderr, "Unable to open device: %s\n", i2cbus);
+		fprintf(stderr, "Unable to open device: %s in %s\n", i2cbus, __func__);
 		return (1);
 	    }
 
 	    if (ioctl(xio, I2C_SLAVE, 0x50) < 0) {
-		fprintf(stderr, "xio: Unable to initialise I2C: %s\n", strerror(errno));
+		fprintf(stderr, "xio: Unable to initialise I2C: %s in %s\n", strerror(errno), __func__);
 		return (1);
 	    }
 	    printf("end_byte = %x and sum = %x - yes\n", end_byte, sum);
@@ -504,7 +506,7 @@ int main(int argc, char **argv) {
     write_checksum = 0;
     asprintf(&i2cbus, "%s", i2cbus_default);
 
-    while ((opt = getopt(argc, argv, "rcmd:i:k:s:")) != -1) {
+    while ((opt = getopt(argc, argv, "rcmd:i:k:s:f:")) != -1) {
 	switch (opt) {
 	case 'r':
 	    config_read = 1;
@@ -522,6 +524,9 @@ int main(int argc, char **argv) {
 	case 'i':
 	    free(i2cbus);
 	    asprintf(&i2cbus, "%s", optarg);
+	    break;
+	case 'f':
+	    asprintf(&file_name, "%s", optarg);
 	    break;
 	case 'k':
 	    if (strlen(optarg) != 32) {
